@@ -1,0 +1,24 @@
+{
+  "name": "flycatcher",
+  "version": "0.0.0",
+  "description": "",
+  "main": "Gruntfile.js",
+  "bin": {
+    "cache": "flycatcher.js"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "grunt": "^0.4.5",
+    "grunt-mocha-test": "^0.12.2"
+  },
+  "devDependencies": {
+    "mocha": "^2.0.1"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "",
+  "license": "ISC"
+}

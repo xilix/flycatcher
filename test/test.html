@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>QUnit Example</title>
+<link rel="stylesheet" href="//code.jquery.com/qunit/qunit-1.15.0.css">
+</head>
+<body>
+<div id="qunit"></div>
+<div id="qunit-fixture"></div>
+<script src="//code.jquery.com/qunit/qunit-1.15.0.js"></script>
+<script type="text/javascript" charset="utf-8" src="../lib/flycatcher.js"></script>
+<script language="JavaScript">
+  var lruCache;
+  QUnit.module( "LRU" );
+  QUnit.test( "Add new elements if it don't exist", function( assert ) {
+    lruCache = new CACHE.generic({
+      proxy: function (data, reg) { return data.id === reg.id; },
+      maxSize: 3,
+      evictionStrategy: {
+        metric: function () { return new Date().getTime(); }
+      }
+    }); 
+    lruCache.update({id: 2, val: "a"});
+    lruCache.update({id: 1, val: "b"});
+    lruCache.update({id: 3, val: "c"});
+    assert.deepEqual(lruCache.cache[0], {id: 2, val: "a"}, "First not modified");
+    assert.deepEqual(lruCache.cache[1], {id: 1, val: "b"}, "Second not modified");
+    assert.deepEqual(lruCache.cache[2], {id: 3, val: "c"}, "Third inserted");
+
+    assert.deepEqual(lruCache.cache[lruCache.hash[0].cacheIndex].val, "a", "First not modified");
+    assert.deepEqual(lruCache.cache[lruCache.hash[1].cacheIndex].val, "b", "Second not modified");
+    assert.deepEqual(lruCache.cache[lruCache.hash[2].cacheIndex].val, "c", "Third inserted");
+    assert.deepEqual(lruCache.cache.length, lruCache.hash.length, "there is no mememory leak");
+  });
+  QUnit.asyncTest( "Update an existent element", function( assert ) {
+    expect(6);
+    lruCache = new CACHE.generic({
+      proxy: function (data, reg) { return data.id === reg.id; },
+      maxSize: 3,
+      evictionStrategy: {
+        metric: function () { return new Date().getTime(); }
+      }
+    }); 
+    lruCache.update({id: 2, val: "a"});
+    lruCache.update({id: 1, val: "b"});
+    lruCache.update({id: 3, val: "c"});
+
+    setTimeout(function() {
+      lruCache.update({id: 1, val: "x"});
+      assert.deepEqual(lruCache.cache[0], {id: 2, val: "a"}, "First not modified");
+      assert.deepEqual(lruCache.cache[1], {id: 1, val: "x"}, "Second modified");
+      assert.deepEqual(lruCache.cache[2], {id: 3, val: "c"}, "Third not modified");
+      assert.deepEqual(lruCache.cache[lruCache.hash[0].cacheIndex].val, "a", "a the first to be inserted");
+      assert.deepEqual(lruCache.cache[lruCache.hash[1].cacheIndex].val, "c", "c the last to be inserted but not the recentest");
+      assert.deepEqual(lruCache.cache[lruCache.hash[2].cacheIndex].val, "x", "former b now x is the recentest");
+      QUnit.start();
+    }, 100);
+  });
+  QUnit.asyncTest( "Add a new element that makes thye cache to overflow", function( assert ) {
+    expect(6);
+    lruCache = new CACHE.generic({
+      proxy: function (data, reg) { return data.id === reg.id; },
+      maxSize: 3,
+      evictionStrategy: {
+        metric: function () { return new Date().getTime(); }
+      }
+    }); 
+    setTimeout(function() { lruCache.update({id: 2, val: "a"}); }, 10);
+    setTimeout(function() { lruCache.update({id: 1, val: "b"}); }, 20);
+    setTimeout(function() { lruCache.update({id: 3, val: "c"}); }, 30);
+
+    setTimeout(function() {
+      lruCache.update({id: 4, val: "d"});
+      assert.deepEqual(lruCache.cache[0], {id: 1, val: "b"}, "b it wasn't the oldest one, so it still exists");
+      assert.deepEqual(lruCache.cache[1], {id: 3, val: "c"}, "c it wasn't the oldest one, so it still exists");
+      assert.deepEqual(lruCache.cache[2], {id: 4, val: "d"}, "the former a have disapered as is the oldest one. now there is a new d");
+      assert.deepEqual(lruCache.cache[lruCache.hash[0].cacheIndex].val, "b", "as a it don't exist anumore now b is the oldest one");
+      assert.deepEqual(lruCache.cache[lruCache.hash[1].cacheIndex].val, "c", "c is no longer the newest one");
+      assert.deepEqual(lruCache.cache[lruCache.hash[2].cacheIndex].val, "d", "the new d now is the newest one");
+      QUnit.start();
+    }, 100);
+  });
+  QUnit.test( "find an existing elment", function( assert ) {
+    lruCache = new CACHE.generic({
+      proxy: function (data, reg) { return data.id === reg.id; },
+      maxSize: 3,
+      evictionStrategy: {
+        metric: function () { return new Date().getTime(); }
+      }
+    }); 
+    lruCache.update({id: 2, val: "a"});
+    lruCache.update({id: 1, val: "b"});
+    lruCache.update({id: 3, val: "c"});
+    setTimeout(function() { lruCache.update({id: 2, val: "a"}); }, 10);
+    setTimeout(function() { lruCache.update({id: 1, val: "b"}); }, 20);
+    setTimeout(function() { lruCache.update({id: 3, val: "c"}); }, 30);
+    assert.deepEqual(lruCache.find({id: 1}), [{id: 1, val: "b"}], 'retrives the element according to the proxy function');
+    assert.deepEqual(lruCache.find({id: 5}), [], 'empty array if the element doesn\'t exist');
+  });
+  QUnit.test("LFU cache test", function( assert ) {
+    expect(6);
+    lfuCache = new CACHE.generic({
+      proxy: function (data, reg) { return data.id === reg.id; },
+      maxSize: 3,
+      evictionStrategy: {
+        metric: function (hashEntry) {
+          return (hashEntry.metric ? hashEntry.metric + 1 : 1);
+        }
+      }
+    }); 
+    lfuCache.update({id: 2, val: "a"});
+    lfuCache.update({id: 2, val: "a"});
+    lfuCache.update({id: 2, val: "a"});
+    lfuCache.update({id: 1, val: "b"});
+    lfuCache.update({id: 3, val: "c"});
+    lfuCache.update({id: 3, val: "c"});
+    lfuCache.update({id: 4, val: "d"});
+    assert.deepEqual(lfuCache.cache[0], {id: 2, val: "a"}, "b it wasn't the oldest one, so it still exists");
+    assert.deepEqual(lfuCache.cache[1], {id: 3, val: "c"}, "c it wasn't the oldest one, so it still exists");
+    assert.deepEqual(lfuCache.cache[2], {id: 4, val: "d"}, "the former a have disapered as is the oldest one. now there is a new d");
+    assert.deepEqual(lfuCache.cache[lfuCache.hash[0].cacheIndex].val, "d", "as a it don't exist anumore now b is the oldest one");
+    assert.deepEqual(lfuCache.cache[lfuCache.hash[1].cacheIndex].val, "c", "c is no longer the newest one");
+    assert.deepEqual(lfuCache.cache[lfuCache.hash[2].cacheIndex].val, "a", "the new d now is the newest one");
+  });
+
+</script>
+</body>
+</html>
+
